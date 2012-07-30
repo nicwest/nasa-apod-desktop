@@ -84,7 +84,7 @@ except:
 
 # Configurable settings:
 NASA_APOD_SITE = 'http://apod.nasa.gov/apod/'
-SHOW_DEBUG = True
+SHOW_DEBUG = False
 PICKLE_FILE = os.path.join(DOWNLOAD_PATH, "history.pickle")
 HISTORY_DATA = {'history': [], 'current': None}
 
@@ -315,7 +315,7 @@ Type=Application
 Name=NASA APOD
 Exec=python """ + os.path.realpath(__file__) + """
 Icon=""" + os.path.join(os.path.dirname(os.path.realpath(__file__)), "nasa.png") + """
-Comment=Checks for new NASA APOD images and set's it as your background
+Comment=Downloads the latest NASA APOD and sets it as the background.
 Categories=
 MimeType=""")
             if not os.path.exists(os.path.join(DESKTOP_PATH, 'nasa-apod-desktop-next.desktop')):
