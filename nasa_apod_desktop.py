@@ -235,6 +235,8 @@ if __name__ == '__main__':
 
     # Check for Notify
     NOTIFY_ON = notify_exists()
+
+    # Load History
     HISTORY_DATA = open_data()
 
     # Create the download path if it doesn't exist
@@ -243,14 +245,19 @@ if __name__ == '__main__':
 
     # Grab the HTML contents of the file
     site_contents = download_site(NASA_APOD_SITE)
+
+    # Grab the Image Title
     image_title = get_title(site_contents)
+
+    # Grab Image URL
     image_url = get_image_url(site_contents)
+
     if len(argv) < 2:
         if len(HISTORY_DATA['history']) < 1 or not HISTORY_DATA['history'][-1]['url'] == image_url:
 
-            # Check for notify and send message about starting
-            nasa_logo = "file://" + os.path.join(os.path.dirname(os.path.realpath(__file__)), "nasa.png")
+            # Notify if present
             if NOTIFY_ON:
+                nasa_logo = "file://" + os.path.join(os.path.dirname(os.path.realpath(__file__)), "nasa.png")
                 n = pynotify.Notification("NASA APOD Desktop", "Fetching Astronomy Picture of the Day...", nasa_logo)
                 n.show()
 
@@ -268,33 +275,53 @@ if __name__ == '__main__':
             HISTORY_DATA['current'] = len(HISTORY_DATA['history']) - 1
             save_data()
 
-            # Check for notify and send message about finishing!
+            # Notify if present
             if NOTIFY_ON:
                 n.update("NASA APOD Desktop", "Updated Background \n\"" + image_title + "\"", filename)
                 n.show()
 
             if SHOW_DEBUG:
                 print "Finished!"
+
         else:
+            if SHOW_DEBUG:
+                print "Updating Background to what history thinks it is"
+
+            # Grab data from history
             result = HISTORY_DATA['history'][HISTORY_DATA['current']]
+
+            # Set Wallpaper
             set_gnome_wallpaper(result['file'])
+
+            # Notify if present
             if result and NOTIFY_ON:
                 n = pynotify.Notification("NASA APOD Desktop", "Updated Background \n\"" + result['title'] + "\"", result['file'])
                 n.show()
+
+            if SHOW_DEBUG:
+                print "Finished!"
     else:
         if argv[1] == "next":
+            # Gets the next image from history or does nothing
             result = get_next()
+
+            # There's a next image! notify
             if result and NOTIFY_ON:
                 n = pynotify.Notification("NASA APOD Desktop", "Updated Background \n\"" + result['title'] + "\"", result['file'])
                 n.show()
 
         if argv[1] == "previous":
+
+            # Gets the previous image from history or does nothing
             result = get_previous()
+
+            # There's a previous image! notify
             if result and NOTIFY_ON:
                 n = pynotify.Notification("NASA APOD Desktop", "Updated Background \n\"" + result['title'] + "\"", result['file'])
                 n.show()
 
         if argv[1] == "write-desktop-files":
+            # Some bodged control icons for the desktop.
             if not os.path.exists(os.path.join(DESKTOP_PATH, 'nasa-apod-desktop-previous.desktop')):
                 with open(os.path.join(DESKTOP_PATH, 'nasa-apod-desktop-previous.desktop'), "w") as next_file:
                     next_file.write("""[Desktop Entry]
