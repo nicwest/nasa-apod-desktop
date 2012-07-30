@@ -49,8 +49,10 @@ sudo apt-get install python-imaging
 Set your resolution variables and your download path (make sure it's writeable):
 '''
 DOWNLOAD_PATH = '/home/nic/backgrounds/'
+DESKTOP_PATH = '/home/nic/Desktop/'
 RESOLUTION_X = 1920
 RESOLUTION_Y = 2160
+MULTI_SCREEN = True
 '''
 
 RUN AT STARTUP
@@ -69,8 +71,10 @@ import urllib
 import urllib2
 import re
 import os
+import pickle
 from PIL import Image
-from sys import stdout
+from sys import stdout, argv
+
 try:
     import pygtk
     pygtk.require('2.0')
@@ -80,7 +84,9 @@ except:
 
 # Configurable settings:
 NASA_APOD_SITE = 'http://apod.nasa.gov/apod/'
-SHOW_DEBUG = False
+SHOW_DEBUG = True
+PICKLE_FILE = os.path.join(DOWNLOAD_PATH, "history.pickle")
+HISTORY_DATA = {'history': [], 'current': None}
 
 
 def download_site(url):
@@ -94,8 +100,8 @@ def download_site(url):
     return reply
 
 
-def get_image(text):
-    ''' Finds the image URL and saves it '''
+def get_image_url(text):
+    ''' Finds the image URL '''
     if SHOW_DEBUG:
         print "Grabbing the image URL"
     reg = re.search('<a href="(image.*?)"', text, re.DOTALL)
@@ -105,7 +111,11 @@ def get_image(text):
     else:
         # Relative path, handle it
         file_url = NASA_APOD_SITE + reg.group(1)
+    return file_url
 
+
+def get_image(file_url):
+    ''' Saves image at URL '''
     filename = os.path.basename(file_url)
     save_to = DOWNLOAD_PATH + os.path.splitext(filename)[0] + '.png'
     if not os.path.isfile(save_to):
@@ -157,6 +167,9 @@ def set_gnome_wallpaper(file_path):
     if SHOW_DEBUG:
         print "Setting the wallpaper"
     command = "gsettings set org.gnome.desktop.background picture-uri file://" + file_path
+    if MULTI_SCREEN:
+        command = command + " | gsettings set org.gnome.desktop.background picture-options spanned"
+
     status, output = commands.getstatusoutput(command)
     return status
 
@@ -183,6 +196,38 @@ def notify_exists():
     else:
         return True
 
+
+def get_previous():
+    if len(HISTORY_DATA['history'][:HISTORY_DATA['current']]) > 0:
+        set_gnome_wallpaper(HISTORY_DATA['history'][HISTORY_DATA['current'] - 1]['file'])
+        HISTORY_DATA['current'] = HISTORY_DATA['current'] - 1
+        save_data()
+        return HISTORY_DATA['history'][HISTORY_DATA['current']]
+    else:
+        return False
+
+
+def get_next():
+    if len(HISTORY_DATA['history'][HISTORY_DATA['current']:]) > 1:
+        set_gnome_wallpaper(HISTORY_DATA['history'][HISTORY_DATA['current'] + 1]['file'])
+        HISTORY_DATA['current'] = HISTORY_DATA['current'] + 1
+        save_data()
+        return HISTORY_DATA['history'][HISTORY_DATA['current']]
+    else:
+        return False
+
+
+def open_data():
+    if not os.path.exists(PICKLE_FILE):
+        pickle.dump(HISTORY_DATA, open(PICKLE_FILE, "wb"))
+
+    return pickle.load(open(PICKLE_FILE, "rb"))
+
+
+def save_data():
+    pickle.dump(HISTORY_DATA, open(PICKLE_FILE, "wb"))
+
+
 if __name__ == '__main__':
     ''' Our program '''
     if SHOW_DEBUG:
@@ -190,6 +235,7 @@ if __name__ == '__main__':
 
     # Check for Notify
     NOTIFY_ON = notify_exists()
+    HISTORY_DATA = open_data()
 
     # Create the download path if it doesn't exist
     if not os.path.exists(os.path.expanduser(DOWNLOAD_PATH)):
@@ -198,26 +244,88 @@ if __name__ == '__main__':
     # Grab the HTML contents of the file
     site_contents = download_site(NASA_APOD_SITE)
     image_title = get_title(site_contents)
+    image_url = get_image_url(site_contents)
+    if len(argv) < 2:
+        if len(HISTORY_DATA['history']) < 1 or not HISTORY_DATA['history'][-1]['url'] == image_url:
 
-    # Check for notify and send message about starting
-    nasa_logo = "file://" + os.path.join(os.path.dirname(os.path.realpath(__file__)), "nasa.png")
-    if NOTIFY_ON:
-        n = pynotify.Notification("NASA APOD Desktop", "Fetching Astronomy Picture of the Day...", nasa_logo)
-        n.show()
+            # Check for notify and send message about starting
+            nasa_logo = "file://" + os.path.join(os.path.dirname(os.path.realpath(__file__)), "nasa.png")
+            if NOTIFY_ON:
+                n = pynotify.Notification("NASA APOD Desktop", "Fetching Astronomy Picture of the Day...", nasa_logo)
+                n.show()
 
-    # Download the image
-    filename = get_image(site_contents)
+            # Download the image
+            filename = get_image(image_url)
 
-    # Resize the image
-    resize_image(filename)
+            # Resize the image
+            resize_image(filename)
 
-    # Set the wallpaper
-    status = set_gnome_wallpaper(filename)
+            # Set the wallpaper
+            status = set_gnome_wallpaper(filename)
 
-    # Check for notify and send message about finishing!
-    if NOTIFY_ON:
-        n.update("NASA APOD Desktop", "Updated Background \n\"" + image_title + "\"", filename)
-        n.show()
+            # Update Hitory
+            HISTORY_DATA['history'].append({'url': image_url, 'file': filename, 'title': image_title})
+            HISTORY_DATA['current'] = len(HISTORY_DATA['history']) - 1
+            save_data()
 
-    if SHOW_DEBUG:
-        print "Finished!"
+            # Check for notify and send message about finishing!
+            if NOTIFY_ON:
+                n.update("NASA APOD Desktop", "Updated Background \n\"" + image_title + "\"", filename)
+                n.show()
+
+            if SHOW_DEBUG:
+                print "Finished!"
+        else:
+            result = HISTORY_DATA['history'][HISTORY_DATA['current']]
+            set_gnome_wallpaper(result['file'])
+            if result and NOTIFY_ON:
+                n = pynotify.Notification("NASA APOD Desktop", "Updated Background \n\"" + result['title'] + "\"", result['file'])
+                n.show()
+    else:
+        if argv[1] == "next":
+            result = get_next()
+            if result and NOTIFY_ON:
+                n = pynotify.Notification("NASA APOD Desktop", "Updated Background \n\"" + result['title'] + "\"", result['file'])
+                n.show()
+
+        if argv[1] == "previous":
+            result = get_previous()
+            if result and NOTIFY_ON:
+                n = pynotify.Notification("NASA APOD Desktop", "Updated Background \n\"" + result['title'] + "\"", result['file'])
+                n.show()
+
+        if argv[1] == "write-desktop-files":
+            if not os.path.exists(os.path.join(DESKTOP_PATH, 'nasa-apod-desktop-previous.desktop')):
+                with open(os.path.join(DESKTOP_PATH, 'nasa-apod-desktop-previous.desktop'), "w") as next_file:
+                    next_file.write("""[Desktop Entry]
+Version=1.0
+Type=Application
+Name=<
+Exec=python """ + os.path.realpath(__file__) + """ previous
+Icon=/usr/share/icons/oxygen/64x64/actions/go-previous.png
+Comment=Goes to the previous background in your NASA APOD history
+Categories=
+MimeType=""")
+
+            if not os.path.exists(os.path.join(DESKTOP_PATH, 'nasa-apod-desktop.desktop')):
+                with open(os.path.join(DESKTOP_PATH, 'nasa-apod-desktop.desktop'), "w") as next_file:
+                    next_file.write("""[Desktop Entry]
+Version=1.0
+Type=Application
+Name=NASA APOD
+Exec=python """ + os.path.realpath(__file__) + """
+Icon=""" + os.path.join(os.path.dirname(os.path.realpath(__file__)), "nasa.png") + """
+Comment=Checks for new NASA APOD images and set's it as your background
+Categories=
+MimeType=""")
+            if not os.path.exists(os.path.join(DESKTOP_PATH, 'nasa-apod-desktop-next.desktop')):
+                with open(os.path.join(DESKTOP_PATH, 'nasa-apod-desktop-next.desktop'), "w") as next_file:
+                    next_file.write("""[Desktop Entry]
+Version=1.0
+Type=Application
+Name=>
+Exec=python """ + os.path.realpath(__file__) + """ next
+Icon=/usr/share/icons/oxygen/64x64/actions/go-next.png
+Comment=Goes to the next background in your NASA APOD history
+Categories=
+MimeType=""")
