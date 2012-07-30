@@ -19,8 +19,8 @@ nasa_apod_desktop.py
 https://github.com/randomdrake/nasa-apod-desktop
 
 Written/Modified by David Drake
-http://randomdrake.com 
-http://twitter.com/randomdrake 
+http://randomdrake.com
+http://twitter.com/randomdrake
 
 Based on apodbackground: http://sourceforge.net/projects/apodbackground/
 Which, is based on: http://0chris.com/nasa-image-day-script-python.html
@@ -36,7 +36,7 @@ Tested on Ubuntu 12.04
 
 
 DESCRIPTION
-1) Grabs the latest image of the day from NASA (http://apod.nasa.gov/apod/). 
+1) Grabs the latest image of the day from NASA (http://apod.nasa.gov/apod/).
 2) Resizes the image to the given resolution.
 3) Sets the image as your desktop.
 4) Adds the image to a list of images that will be cycled through.
@@ -48,10 +48,10 @@ sudo apt-get install python-imaging
 
 Set your resolution variables and your download path (make sure it's writeable):
 '''
-DOWNLOAD_PATH = '/home/randomdrake/backgrounds/'
-RESOLUTION_X = 1680
-RESOLUTION_Y = 1050
-''' 
+DOWNLOAD_PATH = '/home/nic/backgrounds/'
+RESOLUTION_X = 1920
+RESOLUTION_Y = 2160
+'''
 
 RUN AT STARTUP
 To have this run whenever you startup your computer, perform the following steps:
@@ -71,10 +71,17 @@ import re
 import os
 from PIL import Image
 from sys import stdout
+try:
+    import pygtk
+    pygtk.require('2.0')
+    import pynotify
+except:
+    pass
 
 # Configurable settings:
 NASA_APOD_SITE = 'http://apod.nasa.gov/apod/'
 SHOW_DEBUG = False
+
 
 def download_site(url):
     ''' Download HTML of the site'''
@@ -85,6 +92,7 @@ def download_site(url):
     response = opener.open(req)
     reply = response.read()
     return reply
+
 
 def get_image(text):
     ''' Finds the image URL and saves it '''
@@ -110,15 +118,23 @@ def get_image(text):
             print "Retrieving image"
             urllib.urlretrieve(file_url, save_to, print_download_status)
 
-            # Adding additional padding to ensure entire line 
+            # Adding additional padding to ensure entire line
             if SHOW_DEBUG:
                 print "\rDone downloading", human_readable_size(file_size), "       "
-        else: 
+        else:
             urllib.urlretrieve(file_url, save_to)
     elif SHOW_DEBUG:
         print "File exists, moving on"
 
     return save_to
+
+
+def get_title(text):
+    if SHOW_DEBUG:
+        print "grabbing title"
+    reg = re.search('<img[^>]*></a>[\s]*?</center>[\s]*?<center>[\s]*?<b>[\s]*?(.*?)[\s]*?</b>', text, re.DOTALL | re.IGNORECASE)
+    return reg.group(1)
+
 
 def resize_image(filename):
     ''' Resizes the image to the provided dimensions '''
@@ -135,6 +151,7 @@ def resize_image(filename):
     fhandle = open(filename, 'w')
     image.save(fhandle, 'PNG')
 
+
 def set_gnome_wallpaper(file_path):
     ''' Sets the new image as the wallpaper '''
     if SHOW_DEBUG:
@@ -142,6 +159,7 @@ def set_gnome_wallpaper(file_path):
     command = "gsettings set org.gnome.desktop.background picture-uri file://" + file_path
     status, output = commands.getstatusoutput(command)
     return status
+
 
 def print_download_status(block_count, block_size, total_size):
     written_size = human_readable_size(block_count * block_size)
@@ -151,22 +169,40 @@ def print_download_status(block_count, block_size, total_size):
     stdout.write("\r%s bytes of %s         " % (written_size, total_size))
     stdout.flush()
 
+
 def human_readable_size(number_bytes):
     for x in ['bytes', 'KB', 'MB']:
         if number_bytes < 1024.0:
             return "%3.2f%s" % (number_bytes, x)
         number_bytes /= 1024.0
 
+
+def notify_exists():
+    if not pynotify.init("Basics"):
+        return False
+    else:
+        return True
+
 if __name__ == '__main__':
     ''' Our program '''
-    if SHOW_DEBUG: 
+    if SHOW_DEBUG:
         print "Starting"
+
+    # Check for Notify
+    NOTIFY_ON = notify_exists()
+
     # Create the download path if it doesn't exist
     if not os.path.exists(os.path.expanduser(DOWNLOAD_PATH)):
         os.makedirs(os.path.expanduser(DOWNLOAD_PATH))
 
-    # Grab the HTML contents of the file 
+    # Grab the HTML contents of the file
     site_contents = download_site(NASA_APOD_SITE)
+    image_title = get_title(site_contents)
+
+    # Check for notify and send message about starting
+    if NOTIFY_ON:
+        n = pynotify.Notification("NASA APOD Desktop", "Fetching Astronomy Picture of the Day \"" + image_title + "\"...", os.path.join(os.path.dirname(os.path.realpath(__file__)), "nasa.jpg"))
+        n.show()
 
     # Download the image
     filename = get_image(site_contents)
@@ -176,6 +212,11 @@ if __name__ == '__main__':
 
     # Set the wallpaper
     status = set_gnome_wallpaper(filename)
+
+    # Check for notify and send message about finishing!
+    if NOTIFY_ON:
+        n.update("NASA APOD Desktop", "Updated Background \n\"" + image_title + "\"\nEnjoy!", filename)
+        n.show()
+
     if SHOW_DEBUG:
         print "Finished!"
-
