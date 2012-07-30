@@ -200,8 +200,9 @@ if __name__ == '__main__':
     image_title = get_title(site_contents)
 
     # Check for notify and send message about starting
+    nasa_logo = "file://" + os.path.join(os.path.dirname(os.path.realpath(__file__)), "nasa.png")
     if NOTIFY_ON:
-        n = pynotify.Notification("NASA APOD Desktop", "Fetching Astronomy Picture of the Day \"" + image_title + "\"...", os.path.join(os.path.dirname(os.path.realpath(__file__)), "nasa.jpg"))
+        n = pynotify.Notification("NASA APOD Desktop", "Fetching Astronomy Picture of the Day...", nasa_logo)
         n.show()
 
     # Download the image
@@ -215,7 +216,7 @@ if __name__ == '__main__':
 
     # Check for notify and send message about finishing!
     if NOTIFY_ON:
-        n.update("NASA APOD Desktop", "Updated Background \n\"" + image_title + "\"\nEnjoy!", filename)
+        n.update("NASA APOD Desktop", "Updated Background \n\"" + image_title + "\"", filename)
         n.show()
 
     if SHOW_DEBUG:
